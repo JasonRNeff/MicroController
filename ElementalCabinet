@@ -1,0 +1,227 @@
+
+
+#include <WiFi.h>
+#include <SD.h>
+#include <driver/i2s.h>
+
+#include <Arduino.h>
+#include <AudioFileSourceSD.h>
+#include <AudioOutputI2S.h>
+#include <AudioGeneratorMP3.h>
+
+
+//Defualt SPI PINs
+//14 HSPUI_clk
+//12 HSPI_MISO
+//13 HSPI_MOSI
+//23 MOSI - VSPI_MOSI
+//19  MISO - VSPI_MISO
+//5 VSPI_CS
+//2 cs
+//15 HSPI_CS
+// 25 DAC Channel 1
+
+int SD_MISO = 12;
+int SD_SCK = 14;
+int SD_MOSI = 13;
+int SD_CS = 4;
+
+int fireled = 18 ;
+int waterled = 17;
+int airled = 22 ;
+int earthled = ;
+
+int lockpin = 21 ;
+
+int firepin = 33 ;
+int waterpin = 34 ;
+int airpin = 27 ;
+// int earthpin = ;
+
+//int FireSW = 33 ;
+// int WaterSW = ;
+// int AirSW = ;
+// int EarthSW = ;
+
+int firestate = 0;
+int waterstate = 0;
+int airstate = 0;
+int earthstate = 0;
+
+int fireval=0;
+
+bool firecheck = false;
+bool aircheck = false;
+bool watercheck = false;
+
+File root;
+AudioFileSourceSD *aFile;
+AudioOutputI2S *out;
+AudioGeneratorMP3 *mp3;
+
+int LoopNo = 0;
+
+
+// void IRAM_ATTR firesense()
+// {
+ 
+//  fireval = analogRead(firepin);
+//  if (fireval >=600)
+//  {
+//    firecheck = true;
+//  }
+ 
+// }
+
+// void IRAM_ATTR airsense();
+// {
+// airstate = analogRead(airpin);
+// if (airstate >=  100)
+// {
+//  firecheck = true;
+// }  
+// }  
+
+
+
+
+void setup() 
+{
+WiFi.mode(WIFI_OFF);
+Serial.begin(115200); 
+
+aFile = new AudioFileSourceSD();
+out = new AudioOutputI2S(0, 1, 128, 0);
+mp3 = new AudioGeneratorMP3();
+
+
+
+SPI.begin(SD_SCK, SD_MISO, SD_MOSI, SD_CS);
+ if (!SD.begin(SD_CS,SPI,40000000))
+  {
+    Serial.println(F("ERROR: SD card mount failed!"));
+  }
+else
+{
+root = SD.open("/");
+}
+  
+ pinMode(fireled, OUTPUT); 
+ pinMode(waterled, OUTPUT); 
+ pinMode(airled, OUTPUT); 
+//  pinMode(ledpin04, OUTPUT); 
+ 
+ pinMode(lockpin, OUTPUT);
+ 
+ //pinMode(FireSW, INPUT_PULLDOWN);
+//  pinMode(WaterSW, INPUT);
+//  pinMode(AirSW, INPUT);
+//  pinMode(EarthSW, INPUT);
+ 
+ pinMode(airpin, INPUT);
+ pinMode(firepin, INPUT);   
+ pinMode(waterled, INPUT);
+ 
+ //attachInterrupt(firepin, firesense, RISING);
+ //attachInterrupt(airepin, airsense, RISING);
+
+
+//initializes the audio needs to be called once , has to be called again after an MP3->Stop
+if (!aFile->open("/puzzle.mp3"))
+    Serial.println(F("Failed to open audio file"));   //doesnt work becuase it was pulle from other code could probalby clean it up and get rid of the !
+  Serial.println("Created aFile!");
+
+    if (!mp3->begin(aFile, out))
+      Serial.println(F("Failed to start audio!"));
+
+}
+
+
+
+
+
+void loop() 
+{
+  
+  // firestate = digitalRead(FireSW);
+ //Serial.println(firestate);
+ 
+fireval = analogRead(firepin);
+ if (fireval >=600)
+ {
+   firecheck = true;
+ }
+ if (firecheck == true)
+{  
+  digitalWrite(fireled, HIGH);
+}
+
+airstate = analogRead(airpin);
+if (airstate >=  100)
+{
+ aircheck = true;
+}
+if (aircheck == true)
+{
+digitalWrite(airled, HIGH);
+}
+
+waterstate = analogRead(waterpin);
+if (waterstate >=  50)
+{
+ watercheck = true;
+}
+if (watercheck == true)
+{
+digitalWrite(waterled, HIGH);
+}
+
+
+
+if (firecheck == true && aircheck == true && watercheck==true )  //add waterstate etc... to this if
+{
+
+digitalWrite(lockpin, HIGH);
+digitalWrite(fireled, LOW);
+digitalWrite(airled, LOW);
+digitalWrite(waterled, LOW);
+
+LoopNo = LoopNo+1;
+
+//this is what actualy plays the audio, has to run a bunch of times in a loop, for the short zelda puzzle jingle its like 5400 give or take. 
+   if (mp3->isRunning()) 
+   {
+    if (!mp3->loop()) 
+    {
+    mp3->stop(); 
+    }
+   }
+   else 
+   {
+    Serial.printf("MP3 done\n");
+     Serial.println(LoopNo);
+    delay(1000);
+  }
+  Serial.println(LoopNo);
+ 
+ 
+
+
+}
+
+
+if (LoopNo >= 5400) //Number of times that the loop needs to run in order to fully play the short little zelda jingle, could probably put all this in the same space as the  Serial.printf("MP3 done\n") to account for mp3 of diffirent lengths and clean up the code
+{
+digitalWrite(lockpin, LOW);
+aircheck = false;
+firecheck = false;
+LoopNo = 0;
+//initializes the audio again becuase of the the MP3 stop in the previous if statement
+aFile->open("/puzzle.mp3");
+mp3->begin(aFile, out);
+}
+
+
+
+}
+
